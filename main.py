@@ -2,8 +2,19 @@ import qrcode
 from cryptography.fernet import Fernet
 import mysql.connector
 from mysql.connector import Error
-import cv2
-import pyzbar.pyzbar as pyzbar
+import os
+
+# Geração da chave de criptografia ou carregamento de uma chave existente
+chave_arquivo = 'chave.key'
+if os.path.exists(chave_arquivo):
+    with open(chave_arquivo, 'rb') as file:
+        chave = file.read()
+else:
+    chave = Fernet.generate_key()
+    with open(chave_arquivo, 'wb') as file:
+        file.write(chave)
+
+cipher_suite = Fernet(chave)
 
 # Configuração do banco de dados
 def criar_conexao():
@@ -11,8 +22,9 @@ def criar_conexao():
         conexao = mysql.connector.connect(
             host='localhost',
             database='controle_acesso',
-            user='seu_usuario',
-            password='sua_senha'
+            user='root',
+            password='sua_senha',
+            port='3306'
         )
         if conexao.is_connected():
             return conexao
@@ -27,13 +39,9 @@ def criar_tabela(conexao):
     CREATE TABLE IF NOT EXISTS usuarios (
         id INT AUTO_INCREMENT PRIMARY KEY,
         nome VARCHAR(255) NOT NULL,
-        matricula VARCHAR(255) NOT NULL UNIQUE
+        matricula VARBINARY(255) NOT NULL UNIQUE
     )""")
     conexao.commit()
-
-# Geração da chave de criptografia
-chave = Fernet.generate_key()
-cipher_suite = Fernet(chave)
 
 # Função para registrar usuário e gerar QR code
 def registrar_usuario(conexao, nome, matricula):
@@ -45,24 +53,23 @@ def registrar_usuario(conexao, nome, matricula):
     qr.save(f'{nome}_qr.png')
     print(f"QR code gerado para {nome}")
 
-# Função para verificar acesso com QR code
-def verificar_acesso(qr_code_img):
-    decoded_objects = pyzbar.decode(qr_code_img)
-    for obj in decoded_objects:
-        dados_decriptografados = cipher_suite.decrypt(obj.data).decode()
-        cursor = conexao.cursor()
-        cursor.execute("SELECT * FROM usuarios WHERE matricula=%s", (dados_decriptografados,))
-        resultado = cursor.fetchone()
-        if resultado:
-            print(f"Acesso permitido para {resultado[1]}")
+# Função para interface de administrador
+def interface_administrador(conexao):
+    while True:
+        opcao = input("Digite '1' para registrar usuário ou '0' para sair: ")
+        if opcao == '1':
+            nome = input("Digite o nome do usuário: ")
+            matricula = input("Digite a matrícula do usuário: ")
+            registrar_usuario(conexao, nome, matricula)
+        elif opcao == '0':
+            print("Saindo...")
+            break
         else:
-            print("Acesso negado")
+            print("Opção inválida, tente novamente.")
 
 if __name__ == "__main__":
     conexao = criar_conexao()
     if conexao:
         criar_tabela(conexao)
-        registrar_usuario(conexao, 'João Silva', '12345')
-        qr_code_img = cv2.imread('João Silva_qr.png')
-        verificar_acesso(qr_code_img)
+        interface_administrador(conexao)
         conexao.close()
