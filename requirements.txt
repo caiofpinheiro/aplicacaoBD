@@ -1,0 +1,5 @@
+qrcode
+cryptography
+mysql-connector-python
+opencv-python
+pyzbar
